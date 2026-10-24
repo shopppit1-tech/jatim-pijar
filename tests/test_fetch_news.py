@@ -1,5 +1,8 @@
 import base64
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime
@@ -15,6 +18,23 @@ from scripts.generate_editorial import attempted_today, extract_image, extract_t
 
 
 class FetchNewsTests(unittest.TestCase):
+    def test_render_request_script_imports_when_executed_directly(self):
+        environment = os.environ.copy()
+        for name in ("GITHUB_TOKEN", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"):
+            environment.pop(name, None)
+        script = Path(request_render_generation.__file__)
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=script.parents[1],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Skrip ini hanya boleh dijalankan dari GitHub Actions", result.stderr)
+        self.assertNotIn("ModuleNotFoundError", result.stderr)
+
     def test_id_is_stable_and_link_specific(self):
         first = stable_id("https://example.com/news/1")
         self.assertEqual(first, stable_id("https://example.com/news/1"))

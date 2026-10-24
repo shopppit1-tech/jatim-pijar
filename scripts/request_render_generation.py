@@ -7,8 +7,16 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
+
+# When executed as `python scripts/request_render_generation.py`, Python places
+# `scripts/` rather than the repository root on sys.path. Add the root so the
+# shared `scripts.generate_editorial` module imports consistently in Actions.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.generate_editorial import (
     CONTENT_FILE,
