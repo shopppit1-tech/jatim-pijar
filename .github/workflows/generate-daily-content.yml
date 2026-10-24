@@ -18,26 +18,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      HAS_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+      RENDER_CONFIGURED: ${{ secrets.RENDER_WEBHOOK_SECRET != '' && vars.RENDER_API_URL != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Skip safely when no Gemini secret is configured
-        if: env.HAS_GEMINI_KEY != 'true'
+      - name: Skip safely when Render is not configured
+        if: env.RENDER_CONFIGURED != 'true'
         run: |
-          echo "Belum berjalan: tambahkan secret GEMINI_API_KEY di Settings → Secrets and variables → Actions." >> "$GITHUB_STEP_SUMMARY"
+          echo "Belum berjalan: isi secret RENDER_WEBHOOK_SECRET dan variable RENDER_API_URL setelah service Render siap." >> "$GITHUB_STEP_SUMMARY"
       - name: Set up Python
-        if: env.HAS_GEMINI_KEY == 'true'
+        if: env.RENDER_CONFIGURED == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Generate at most one new item
-        if: env.HAS_GEMINI_KEY == 'true'
+      - name: Request at most one new item from Render
+        if: env.RENDER_CONFIGURED == 'true'
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python scripts/generate_editorial.py
+          RENDER_API_URL: ${{ vars.RENDER_API_URL }}
+          RENDER_WEBHOOK_SECRET: ${{ secrets.RENDER_WEBHOOK_SECRET }}
+        run: python scripts/request_render_generation.py
       - name: Save daily limit and generated content
-        if: always() && env.HAS_GEMINI_KEY == 'true'
+        if: always() && env.RENDER_CONFIGURED == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

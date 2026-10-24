@@ -1,48 +1,47 @@
 # JatimPijar — pantauan berita RSS dan draf AI harian
 
-Website statis untuk mengambil metadata RSS publik dan menyiapkan satu draf narasi berita beserta ilustrasi AI setiap hari.
+Website publik ini mengambil metadata RSS untuk Jawa Timur, lalu menampilkan paling banyak satu draf narasi dan satu ilustrasi AI baru per hari. **Frontend, arsip berita, gambar, dan hasil tetap di GitHub Pages/repository; Render hanya menjalankan endpoint backend yang memakai Gemini.**
 
-## Otomatis
-- GitHub Actions dijadwalkan setiap 15 menit untuk mengambil RSS terbaru.
-- Workflow terpisah berjalan sekali sehari pada pukul 08.00 WIB dan hanya membuat konten jika berita terbaru belum pernah diproses.
-- Batas keras satu percobaan generasi per tanggal WIB: satu teks narasi dan satu ilustrasi 1K. Jika tidak ada berita baru atau secret Gemini belum tersedia, tidak ada panggilan AI.
-- Narasi memakai judul dan cuplikan RSS; sistem tidak membaca artikel penuh. Setiap gambar merupakan ilustrasi editorial, bukan foto atau bukti kejadian.
-- Maksimal 30 draf AI terbaru tampil pada panel dengan tombol salin teks lengkap, tautan verifikasi sumber, dan unduh ilustrasi.
-- Pencarian tidak menyertakan Malang Raya.
+## Cara kerja otomatis
 
-## Batasan penting
-Narasi merupakan **draf AI dari metadata dan cuplikan RSS**, bukan ringkasan artikel lengkap atau fakta yang sudah diverifikasi. Teks dan gambar akan disajikan di situs publik agar dapat disalin. Periksa isi sumber asli sebelum memakai narasi; jangan menggambarkan ilustrasi AI sebagai foto nyata.
+- GitHub Actions memperbarui metadata RSS secara berkala.
+- Workflow terpisah berjalan pukul 08.00 WIB, memilih berita terbaru yang belum pernah diproses, lalu memanggil backend Render.
+- Ada batas keras satu percobaan per tanggal WIB. Jika berita sudah diproses, konfigurasi belum lengkap, atau permintaan gagal, workflow tidak mencoba lagi pada tanggal yang sama. Tombol **Run workflow** memakai batas yang sama.
+- Backend memakai judul dan cuplikan metadata RSS; tidak membaca artikel lengkap. Teks dan gambar adalah draf/ilustrasi AI, bukan fakta terverifikasi atau foto kejadian.
+- Maksimal 30 hasil tersimpan di repository dan ditampilkan di panel dengan tombol salin naskah, buka sumber, dan unduh ilustrasi.
 
-## Mulai cepat di GitHub
-1. Buka **Settings → Pages**.
-2. Pada **Build and deployment**, pilih **Deploy from a branch**, branch `main`, folder `/(root)`, lalu **Save**.
-3. Pastikan Actions diizinkan berjalan. Workflow pembaruan menyatakan izin `contents: write` untuk menyimpan hasil RSS ke `news.json` dan `content.json`.
-4. Dari tab **Actions**, jalankan **Update berita JatimPijar** dengan **Run workflow**. Push pertama ke `main` juga memicu pengambilan data.
-5. Tunggu workflow selesai, lalu buka URL yang muncul di **Settings → Pages** dan muat ulang.
+## Setup layanan
 
-Untuk mengaktifkan narasi dan gambar AI, tambahkan secret repository bernama `GEMINI_API_KEY` melalui **Settings → Secrets and variables → Actions → New repository secret**. Jangan menaruh key di berkas, commit, atau chat. Key yang pernah dikirim di chat harus dicabut di Google AI Studio; buat key baru dan simpan langsung sebagai secret GitHub.
+1. Repository ini dapat dipublikasikan melalui **Settings → Pages → Deploy from a branch → `main` → `/(root)`**. URL saat ini: <https://shopppit1-tech.github.io/jatim-pijar/>.
+2. Buat Web Service Render dari Blueprint `render.yaml`, atau gunakan service `jatim-pijar-ai` yang sudah dibuat pada workspace. Tetap pilih paket **Free** dan region **Singapore**. Service menjalankan `render_service.py` dan health check `/health`.
+3. Di Render → service → **Environment**, masukkan key Gemini baru sebagai `GEMINI_API_KEY`. Key hanya boleh berada sebagai environment secret Render—jangan commit, kirim lewat chat, atau simpan sebagai GitHub secret. **Cabut key yang pernah dikirim lewat chat dan buat key baru di Google AI Studio.**
+4. Buat satu rahasia acak kuat untuk `RENDER_WEBHOOK_SECRET`. Isinya harus sama pada environment service Render dan **Settings → Secrets and variables → Actions → Secrets** di repository. Rahasia ini mengizinkan GitHub Actions memanggil endpoint backend; jangan masukkan ke URL atau log.
+5. Tambahkan **Actions variable** `RENDER_API_URL` berisi URL dasar service, misalnya `https://jatim-pijar-ai.onrender.com` (tanpa path). URL harus HTTPS dan domain `.onrender.com`.
+6. Setelah secret dan variable disimpan, buka **Actions → Buat narasi dan ilustrasi AI harian → Run workflow** untuk uji pertama. Hasil akan dikomit ke `main` dan tampil di GitHub Pages setelah Pages selesai deploy.
 
-Setelah secret baru disimpan, buka **Actions → Buat narasi dan ilustrasi AI harian → Run workflow** untuk mencoba generasi pertama. Tombol manual dan jadwal harian memakai batas yang sama: paling banyak satu percobaan Gemini per tanggal WIB.
+## Paket gratis dan batasan
 
-Jadwal berjalan pada pukul 01.00 UTC (08.00 WIB). Model gambar standar yang dipakai tidak memiliki free tier. Berdasarkan tarif Google yang diperiksa pada 24 Oktober 2026, satu gambar 1K sekitar US$0,0336; 30 gambar sekitar US$1,01, belum termasuk token teks/pajak. [Harga Gemini API](https://ai.google.dev/gemini-api/docs/pricing).
+Render Free tidak dikenai biaya service, tetapi service dapat tidur setelah 15 menit tanpa trafik dan cold start dapat memerlukan sekitar satu menit. Render Free bersifat sementara/stateless; karena itu endpoint tidak menyimpan hasil di disk—GitHub repository tetap menjadi arsip. Waktu jadwal Actions dapat terlambat.
+
+Biaya Gemini terpisah dari Render. Model gambar yang dipilih tidak memiliki free tier; perkiraan tarif yang diperiksa pada 24 Oktober 2026 sekitar US$0,0336 per gambar 1K atau sekitar US$1,01 untuk 30 gambar, belum termasuk teks dan pajak. Periksa kembali [harga resmi Gemini API](https://ai.google.dev/gemini-api/docs/pricing) karena tarif dapat berubah. Batas harian membatasi jumlah permintaan aplikasi, bukan tagihan atau kuota keseluruhan akun Gemini.
 
 ## Menjalankan lokal dan pemeriksaan
-Tidak perlu memasang paket Python tambahan. Jalankan dari folder repository:
+
+Tidak ada paket Python tambahan yang diperlukan untuk mengambil RSS, menjalankan backend, atau meminta generasi (key dan endpoint tentu dibutuhkan untuk panggilan nyata). Dari folder repository:
 
 ```bash
 python3 scripts/fetch_news.py
 python3 -m http.server 8000
 ```
 
-Kemudian buka <http://localhost:8000>. Untuk pemeriksaan lokal, jalankan:
+Untuk pemeriksaan tanpa panggilan jaringan/Gemini:
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 -m py_compile scripts/fetch_news.py scripts/generate_editorial.py
+python3 -m py_compile scripts/fetch_news.py scripts/generate_editorial.py scripts/request_render_generation.py render_service.py
 node --check app.js
 ```
 
-Pengambilan RSS tidak memerlukan key. Generasi narasi/gambar memerlukan `GEMINI_API_KEY` yang valid dan dapat memakai kuota atau biaya API. Jadwal GitHub bisa terlambat; pukul 08.00 WIB adalah waktu target, bukan jaminan tepat waktu.
-
 ## Publikasi
-Pilih **Konten siap posting**, salin caption, lalu tempel ke media sosial. Pengiriman otomatis ke Facebook/YouTube tidak termasuk dalam paket ini; itu membutuhkan integrasi resmi dan izin platform.
+
+Pilih **Konten siap posting**, salin narasi, periksa fakta ke sumber asli, lalu tempel manual ke kanal sosial. Pengiriman otomatis ke Facebook/YouTube tidak termasuk; itu memerlukan integrasi resmi dan izin platform.

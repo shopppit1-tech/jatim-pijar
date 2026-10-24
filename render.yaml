@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: jatim-pijar-ai
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: python -m py_compile render_service.py scripts/generate_editorial.py
+    startCommand: python render_service.py
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RENDER_WEBHOOK_SECRET
+        sync: false

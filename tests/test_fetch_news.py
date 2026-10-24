@@ -8,6 +8,8 @@ from unittest import mock
 
 import scripts.fetch_news as fetch_news
 import scripts.generate_editorial as generate_editorial
+import scripts.request_render_generation as request_render_generation
+import render_service
 from scripts.fetch_news import editorial_headline, make_post, stable_id
 from scripts.generate_editorial import attempted_today, extract_image, extract_text, newest_unprocessed, parse_json_object
 
@@ -175,6 +177,128 @@ class FetchNewsTests(unittest.TestCase):
                  mock.patch.object(generate_editorial, "call_gemini") as api_call:
                 generate_editorial.main()
             api_call.assert_not_called()
+
+    def test_render_url_requires_https_on_render_domain(self):
+        self.assertEqual(
+            request_render_generation.validate_render_url("https://jatim-pijar-ai.onrender.com/"),
+            "https://jatim-pijar-ai.onrender.com",
+        )
+        with self.assertRaises(SystemExit):
+            request_render_generation.validate_render_url("http://jatim-pijar-ai.onrender.com")
+        with self.assertRaises(SystemExit):
+            request_render_generation.validate_render_url("https://example.com")
+
+    def test_gemini_redirect_is_disabled_to_protect_api_key(self):
+        handler = generate_editorial.NoRedirectHandler()
+        request = request_render_generation.urllib.request.Request(
+            "https://generativelanguage.googleapis.com/v1beta/interactions"
+        )
+        self.assertIsNone(handler.redirect_request(
+            request, None, 302, "Found", {}, "https://attacker.example/collect"
+        ))
+
+    def test_render_request_sends_webhook_token_not_gemini_key(self):
+        response_payload = {"status": "ok"}
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return json.dumps(response_payload).encode("utf-8")
+
+        class Opener:
+            request = None
+
+            def open(self, request, timeout):
+                self.request = request
+                self.timeout = timeout
+                return Response()
+
+        opener = Opener()
+        item = {"id": "0123456789abcdef", "title": "Kabar", "link": "https://example.com"}
+        with mock.patch.object(request_render_generation.urllib.request, "build_opener", return_value=opener):
+            result = request_render_generation.call_render(
+                "https://jatim-pijar-ai.onrender.com", "test-webhook-token-not-a-real-secret-123456", item
+            )
+        self.assertEqual(result, response_payload)
+        self.assertEqual(opener.request.get_header("Authorization"), "Bearer test-webhook-token-not-a-real-secret-123456")
+        self.assertEqual(opener.request.full_url, "https://jatim-pijar-ai.onrender.com/internal/generate")
+        self.assertNotIn(b"GEMINI_API_KEY", opener.request.data)
+
+    def test_render_backend_rejects_invalid_story_payload(self):
+        with self.assertRaises(ValueError):
+            render_service.normalize_item({"id": "bad", "title": "Kabar"})
+        with self.assertRaises(ValueError):
+            render_service.normalize_item({
+                "id": "0123456789abcdef", "title": "Kabar", "link": "javascript:alert(1)"
+            })
+
+    def test_render_process_has_secondary_daily_limit(self):
+        with mock.patch.object(render_service, "_last_attempt_local_date", None):
+            self.assertTrue(render_service.reserve_generation_day("2026-10-24"))
+            self.assertFalse(render_service.reserve_generation_day("2026-10-24"))
+            self.assertTrue(render_service.reserve_generation_day("2026-10-25"))
+
+    def test_render_workflow_saves_one_result_and_blocks_same_day_repeat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            news_file = root / "news.json"
+            content_file = root / "generated_content.json"
+            state_file = root / "generation_state.json"
+            image_dir = root / "assets" / "generated"
+            news_file.write_text(json.dumps({"items": [{
+                "id": "0123456789abcdef", "title": "Berita baru", "region": "Surabaya",
+                "source": "RSS", "link": "https://example.com/news", "published": "2026-10-24T00:00:00Z",
+                "description_context": "Cuplikan RSS.",
+            }]}), encoding="utf-8")
+            content_file.write_text(json.dumps({"items": []}), encoding="utf-8")
+            image_data = base64.b64encode(b"\xff\xd8\xfffake-jpeg").decode("ascii")
+            result = {
+                "news_id": "0123456789abcdef", "headline": "Judul draf", "narrative": "Narasi draf.",
+                "image_base64": image_data, "image_extension": ".jpg", "image_mime_type": "image/jpeg",
+            }
+            with mock.patch.dict("os.environ", {
+                "RENDER_API_URL": "https://jatim-pijar-ai.onrender.com",
+                "RENDER_WEBHOOK_SECRET": "test-webhook-token-not-a-real-secret-123456",
+            }), mock.patch.object(request_render_generation, "NEWS_FILE", news_file), \
+                 mock.patch.object(request_render_generation, "CONTENT_FILE", content_file), \
+                 mock.patch.object(request_render_generation, "STATE_FILE", state_file), \
+                 mock.patch.object(request_render_generation, "IMAGE_DIR", image_dir), \
+                 mock.patch.object(request_render_generation, "call_render", return_value=result) as render_call:
+                request_render_generation.main()
+                request_render_generation.main()
+            self.assertEqual(render_call.call_count, 1)
+            saved = json.loads(content_file.read_text(encoding="utf-8"))
+            self.assertEqual(saved["items"][0]["news_id"], "0123456789abcdef")
+            self.assertTrue((image_dir / "0123456789abcdef.jpg").exists())
+
+    def test_failed_render_request_keeps_daily_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            news_file = root / "news.json"
+            content_file = root / "generated_content.json"
+            state_file = root / "generation_state.json"
+            news_file.write_text(json.dumps({"items": [{
+                "id": "0123456789abcdef", "title": "Berita baru", "published": "2026-10-24T00:00:00Z",
+            }]}), encoding="utf-8")
+            content_file.write_text(json.dumps({"items": []}), encoding="utf-8")
+            with mock.patch.dict("os.environ", {
+                "RENDER_API_URL": "https://jatim-pijar-ai.onrender.com",
+                "RENDER_WEBHOOK_SECRET": "test-webhook-token-not-a-real-secret-123456",
+            }), mock.patch.object(request_render_generation, "NEWS_FILE", news_file), \
+                 mock.patch.object(request_render_generation, "CONTENT_FILE", content_file), \
+                 mock.patch.object(request_render_generation, "STATE_FILE", state_file), \
+                 mock.patch.object(request_render_generation, "call_render", side_effect=RuntimeError("simulated")) as render_call:
+                with self.assertRaises(RuntimeError):
+                    request_render_generation.main()
+                request_render_generation.main()
+            self.assertEqual(render_call.call_count, 1)
+            state = json.loads(state_file.read_text(encoding="utf-8"))
+            self.assertEqual(state["last_attempt_local_date"], datetime.now(generate_editorial.WIB).date().isoformat())
 
 
 if __name__ == "__main__":

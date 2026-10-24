@@ -79,6 +79,11 @@ def parse_json_object(text):
     raise RuntimeError("Respons teks Gemini tidak berisi objek JSON yang dapat dibaca.")
 
 
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, _request, _file, _code, _message, _headers, _new_url):
+        return None
+
+
 def call_gemini(api_key, payload):
     request = urllib.request.Request(
         API_URL,
@@ -90,7 +95,8 @@ def call_gemini(api_key, payload):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=150) as response:
+        opener = urllib.request.build_opener(NoRedirectHandler())
+        with opener.open(request, timeout=150) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         # Do not print request headers, response bodies, or credentials into Actions logs.
