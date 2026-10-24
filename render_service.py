@@ -233,10 +233,19 @@ def make_handler():
             try:
                 with _generation_lock:
                     headline, narrative = generate_narrative(api_key, item)
+            except Exception as error:
+                detail = str(error).splitlines()[0][:180] if isinstance(error, RuntimeError) else type(error).__name__
+                logging.warning("Gemini text step failed (%s): %s", type(error).__name__, detail)
+                self.send_json(502, {"error": "text generation failed"})
+                return
+
+            try:
+                with _generation_lock:
                     image_bytes, extension = generate_image(api_key, item)
             except Exception as error:
-                logging.warning("Gemini generation failed (%s).", type(error).__name__)
-                self.send_json(502, {"error": "generation failed; retry on the next daily window"})
+                detail = str(error).splitlines()[0][:180] if isinstance(error, RuntimeError) else type(error).__name__
+                logging.warning("Gemini image step failed (%s): %s", type(error).__name__, detail)
+                self.send_json(502, {"error": "image generation failed"})
                 return
 
             mime_type = "image/jpeg" if extension == ".jpg" else "image/png"
