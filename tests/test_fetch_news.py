@@ -99,6 +99,9 @@ class FetchNewsTests(unittest.TestCase):
         self.assertEqual(extract_text(response), "narasi")
         self.assertEqual(extract_image(response), ("aW1hZ2U=", "image/jpeg"))
         self.assertEqual(extract_text({"output_text": "teks langsung"}), "teks langsung")
+        self.assertEqual(extract_text({"interaction": {"steps": [{
+            "type": "model_output", "content": [{"type": "json", "json": "{\"headline\":\"A\"}"}],
+        }]}}), '{"headline":"A"}')
         self.assertEqual(extract_image({"output_image": {"data": "cG5n", "mime_type": "image/png"}}),
                          ("cG5n", "image/png"))
 

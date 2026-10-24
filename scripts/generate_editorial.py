@@ -39,16 +39,25 @@ def write_json_atomic(path, payload):
 
 
 def extract_text(response):
+    if not isinstance(response, dict):
+        return ""
     direct = response.get("output_text")
     if isinstance(direct, str) and direct.strip():
         return direct.strip()
+    nested = response.get("interaction")
+    if isinstance(nested, dict):
+        nested_text = extract_text(nested)
+        if nested_text:
+            return nested_text
     blocks = []
     for step in response.get("steps", []):
         if step.get("type") != "model_output":
             continue
         for block in step.get("content", []):
-            if block.get("type") == "text" and isinstance(block.get("text"), str):
-                blocks.append(block["text"])
+            if block.get("type") in ("text", "json", "output_text"):
+                value = block.get("text", block.get("json"))
+                if isinstance(value, str):
+                    blocks.append(value)
     return "\n".join(blocks).strip()
 
 
@@ -146,7 +155,24 @@ def generate_narrative(api_key, news_item):
         },
     })
     text = extract_text(response)
-    result = parse_json_object(text)
+    try:
+        result = parse_json_object(text)
+    except RuntimeError:
+        step_types = [step.get("type") for step in response.get("steps", []) if isinstance(step, dict)]
+        content_types = [
+            block.get("type")
+            for step in response.get("steps", []) if isinstance(step, dict)
+            for block in step.get("content", []) if isinstance(block, dict)
+        ]
+        shape = {
+            "status": response.get("status"),
+            "top_level_keys": sorted(response.keys()),
+            "step_types": step_types[:8],
+            "content_types": content_types[:8],
+            "text_length": len(text),
+            "preview": " ".join(text.split())[:100],
+        }
+        raise RuntimeError(f"Respons teks Gemini tidak dapat diparse; response_shape={json.dumps(shape, ensure_ascii=False)}") from None
     headline = str(result.get("headline", "")).strip()
     narrative = str(result.get("narrative", "")).strip()
     if not headline or len(headline) > 180 or not narrative or len(narrative) > 3500:
