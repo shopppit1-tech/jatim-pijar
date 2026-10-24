@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: generate-daily-editorial
@@ -17,28 +18,19 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      RENDER_CONFIGURED: ${{ secrets.RENDER_WEBHOOK_SECRET != '' && vars.RENDER_API_URL != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Skip safely when Render is not configured
-        if: env.RENDER_CONFIGURED != 'true'
-        run: |
-          echo "Belum berjalan: isi secret RENDER_WEBHOOK_SECRET dan variable RENDER_API_URL setelah service Render siap." >> "$GITHUB_STEP_SUMMARY"
       - name: Set up Python
-        if: env.RENDER_CONFIGURED == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Request at most one new item from Render
-        if: env.RENDER_CONFIGURED == 'true'
         env:
-          RENDER_API_URL: ${{ vars.RENDER_API_URL }}
-          RENDER_WEBHOOK_SECRET: ${{ secrets.RENDER_WEBHOOK_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/request_render_generation.py
       - name: Save daily limit and generated content
-        if: always() && env.RENDER_CONFIGURED == 'true'
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Private-token-protected Gemini generation endpoint for the Render web service."""
+"""GitHub Actions-authenticated Gemini generation endpoint for Render."""
 import base64
 import hmac
 import json
@@ -7,6 +7,8 @@ import logging
 import os
 import re
 import threading
+import urllib.error
+import urllib.request
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -15,13 +17,70 @@ from zoneinfo import ZoneInfo
 from scripts.generate_editorial import generate_image, generate_narrative
 
 MAX_REQUEST_BYTES = 32 * 1024
+GITHUB_REPO = "shopppit1-tech/jatim-pijar"
+GENERATION_WORKFLOW = ".github/workflows/generate-daily-content.yml"
+GITHUB_API = "https://api.github.com"
 WIB = ZoneInfo("Asia/Jakarta")
 _generation_lock = threading.Lock()
 _last_attempt_local_date = None
 
 
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, _request, _file, _code, _message, _headers, _new_url):
+        return None
+
+
+def github_api_get(path, token):
+    request = urllib.request.Request(
+        f"{GITHUB_API}{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "JatimPijar-Render-Backend",
+        },
+        method="GET",
+    )
+    opener = urllib.request.build_opener(NoRedirectHandler())
+    with opener.open(request, timeout=15) as response:
+        raw = response.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("GitHub response too large")
+        return json.loads(raw.decode("utf-8"))
+
+
+def verify_github_action(token, run_id, run_attempt):
+    """Require a repo-scoped GitHub Actions token and the expected active workflow run."""
+    if not token or not re.fullmatch(r"[0-9]{1,20}", str(run_id or "")):
+        return False
+    if not re.fullmatch(r"[0-9]{1,6}", str(run_attempt or "")):
+        return False
+    try:
+        installation = github_api_get("/installation/repositories?per_page=100", token)
+        allowed_repositories = {
+            repo.get("full_name") for repo in installation.get("repositories", [])
+            if isinstance(repo, dict)
+        }
+        if GITHUB_REPO not in allowed_repositories:
+            return False
+        run = github_api_get(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}", token)
+    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        return False
+
+    repository = run.get("repository") or {}
+    return (
+        str(run.get("id")) == str(run_id)
+        and str(run.get("run_attempt")) == str(run_attempt)
+        and repository.get("full_name") == GITHUB_REPO
+        and run.get("path") == GENERATION_WORKFLOW
+        and run.get("head_branch") == "main"
+        and run.get("event") in ("schedule", "workflow_dispatch")
+        and run.get("status") == "in_progress"
+    )
+
+
 def reserve_generation_day(today):
-    """Defense in depth per process; GitHub's committed state is the durable daily lock."""
+    """Defense in depth per process; the workflow's committed state is the durable daily lock."""
     global _last_attempt_local_date
     with _generation_lock:
         if _last_attempt_local_date == today:
@@ -82,12 +141,14 @@ def make_handler():
                 self.send_json(404, {"error": "not found"})
                 return
 
-            expected_secret = os.environ.get("RENDER_WEBHOOK_SECRET", "")
             supplied_auth = self.headers.get("Authorization", "")
-            expected_auth = f"Bearer {expected_secret}" if expected_secret else ""
-            if not expected_secret or not hmac.compare_digest(
-                supplied_auth.encode("utf-8"), expected_auth.encode("utf-8")
-            ):
+            if not supplied_auth.startswith("Bearer "):
+                self.send_json(401, {"error": "unauthorized"})
+                return
+            github_token = supplied_auth[len("Bearer "):].strip()
+            run_id = self.headers.get("X-GitHub-Run-ID", "")
+            run_attempt = self.headers.get("X-GitHub-Run-Attempt", "")
+            if not verify_github_action(github_token, run_id, run_attempt):
                 self.send_json(401, {"error": "unauthorized"})
                 return
 

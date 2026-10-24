@@ -197,7 +197,7 @@ class FetchNewsTests(unittest.TestCase):
             request, None, 302, "Found", {}, "https://attacker.example/collect"
         ))
 
-    def test_render_request_sends_webhook_token_not_gemini_key(self):
+    def test_render_request_sends_actions_token_and_run_metadata(self):
         response_payload = {"status": "ok"}
 
         class Response:
@@ -222,10 +222,12 @@ class FetchNewsTests(unittest.TestCase):
         item = {"id": "0123456789abcdef", "title": "Kabar", "link": "https://example.com"}
         with mock.patch.object(request_render_generation.urllib.request, "build_opener", return_value=opener):
             result = request_render_generation.call_render(
-                "https://jatim-pijar-ai.onrender.com", "test-webhook-token-not-a-real-secret-123456", item
+                "https://jatim-pijar-ai.onrender.com", "test-github-actions-token", "12345", "1", item
             )
         self.assertEqual(result, response_payload)
-        self.assertEqual(opener.request.get_header("Authorization"), "Bearer test-webhook-token-not-a-real-secret-123456")
+        self.assertEqual(opener.request.get_header("Authorization"), "Bearer test-github-actions-token")
+        self.assertEqual(opener.request.get_header("X-github-run-id"), "12345")
+        self.assertEqual(opener.request.get_header("X-github-run-attempt"), "1")
         self.assertEqual(opener.request.full_url, "https://jatim-pijar-ai.onrender.com/internal/generate")
         self.assertNotIn(b"GEMINI_API_KEY", opener.request.data)
 
@@ -242,6 +244,23 @@ class FetchNewsTests(unittest.TestCase):
             self.assertTrue(render_service.reserve_generation_day("2026-10-24"))
             self.assertFalse(render_service.reserve_generation_day("2026-10-24"))
             self.assertTrue(render_service.reserve_generation_day("2026-10-25"))
+
+    def test_render_backend_requires_expected_active_github_workflow(self):
+        installation = {"repositories": [{"full_name": render_service.GITHUB_REPO}]}
+        run = {
+            "id": 12345,
+            "run_attempt": 1,
+            "repository": {"full_name": render_service.GITHUB_REPO},
+            "path": render_service.GENERATION_WORKFLOW,
+            "head_branch": "main",
+            "event": "schedule",
+            "status": "in_progress",
+        }
+        with mock.patch.object(render_service, "github_api_get", side_effect=[installation, run]):
+            self.assertTrue(render_service.verify_github_action("test-token", "12345", "1"))
+        run["path"] = ".github/workflows/other.yml"
+        with mock.patch.object(render_service, "github_api_get", side_effect=[installation, run]):
+            self.assertFalse(render_service.verify_github_action("test-token", "12345", "1"))
 
     def test_render_workflow_saves_one_result_and_blocks_same_day_repeat(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -262,8 +281,9 @@ class FetchNewsTests(unittest.TestCase):
                 "image_base64": image_data, "image_extension": ".jpg", "image_mime_type": "image/jpeg",
             }
             with mock.patch.dict("os.environ", {
-                "RENDER_API_URL": "https://jatim-pijar-ai.onrender.com",
-                "RENDER_WEBHOOK_SECRET": "test-webhook-token-not-a-real-secret-123456",
+                "GITHUB_TOKEN": "test-github-actions-token",
+                "GITHUB_RUN_ID": "12345",
+                "GITHUB_RUN_ATTEMPT": "1",
             }), mock.patch.object(request_render_generation, "NEWS_FILE", news_file), \
                  mock.patch.object(request_render_generation, "CONTENT_FILE", content_file), \
                  mock.patch.object(request_render_generation, "STATE_FILE", state_file), \
@@ -287,8 +307,9 @@ class FetchNewsTests(unittest.TestCase):
             }]}), encoding="utf-8")
             content_file.write_text(json.dumps({"items": []}), encoding="utf-8")
             with mock.patch.dict("os.environ", {
-                "RENDER_API_URL": "https://jatim-pijar-ai.onrender.com",
-                "RENDER_WEBHOOK_SECRET": "test-webhook-token-not-a-real-secret-123456",
+                "GITHUB_TOKEN": "test-github-actions-token",
+                "GITHUB_RUN_ID": "12345",
+                "GITHUB_RUN_ATTEMPT": "1",
             }), mock.patch.object(request_render_generation, "NEWS_FILE", news_file), \
                  mock.patch.object(request_render_generation, "CONTENT_FILE", content_file), \
                  mock.patch.object(request_render_generation, "STATE_FILE", state_file), \

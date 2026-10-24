@@ -11,5 +11,3 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
-      - key: RENDER_WEBHOOK_SECRET
-        sync: false

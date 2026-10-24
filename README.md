@@ -6,18 +6,17 @@ Website publik ini mengambil metadata RSS untuk Jawa Timur, lalu menampilkan pal
 
 - GitHub Actions memperbarui metadata RSS secara berkala.
 - Workflow terpisah berjalan pukul 08.00 WIB, memilih berita terbaru yang belum pernah diproses, lalu memanggil backend Render.
-- Ada batas keras satu percobaan per tanggal WIB. Jika berita sudah diproses, konfigurasi belum lengkap, atau permintaan gagal, workflow tidak mencoba lagi pada tanggal yang sama. Tombol **Run workflow** memakai batas yang sama.
+- Ada batas keras satu percobaan per tanggal WIB. Jika berita sudah diproses atau permintaan gagal, workflow tidak mencoba lagi pada tanggal yang sama. Tombol **Run workflow** memakai batas yang sama.
+- Actions menggunakan token GitHub sementara untuk memanggil backend. Server memeriksa token dan run terhadap repository/workflow yang benar; tidak perlu secret pemicu tambahan di GitHub.
 - Backend memakai judul dan cuplikan metadata RSS; tidak membaca artikel lengkap. Teks dan gambar adalah draf/ilustrasi AI, bukan fakta terverifikasi atau foto kejadian.
 - Maksimal 30 hasil tersimpan di repository dan ditampilkan di panel dengan tombol salin naskah, buka sumber, dan unduh ilustrasi.
 
 ## Setup layanan
 
-1. Repository ini dapat dipublikasikan melalui **Settings → Pages → Deploy from a branch → `main` → `/(root)`**. URL saat ini: <https://shopppit1-tech.github.io/jatim-pijar/>.
-2. Buat Web Service Render dari Blueprint `render.yaml`, atau gunakan service `jatim-pijar-ai` yang sudah dibuat pada workspace. Tetap pilih paket **Free** dan region **Singapore**. Service menjalankan `render_service.py` dan health check `/health`.
-3. Di Render → service → **Environment**, masukkan key Gemini baru sebagai `GEMINI_API_KEY`. Key hanya boleh berada sebagai environment secret Render—jangan commit, kirim lewat chat, atau simpan sebagai GitHub secret. **Cabut key yang pernah dikirim lewat chat dan buat key baru di Google AI Studio.**
-4. Buat satu rahasia acak kuat untuk `RENDER_WEBHOOK_SECRET`. Isinya harus sama pada environment service Render dan **Settings → Secrets and variables → Actions → Secrets** di repository. Rahasia ini mengizinkan GitHub Actions memanggil endpoint backend; jangan masukkan ke URL atau log.
-5. Tambahkan **Actions variable** `RENDER_API_URL` berisi URL dasar service, misalnya `https://jatim-pijar-ai.onrender.com` (tanpa path). URL harus HTTPS dan domain `.onrender.com`.
-6. Setelah secret dan variable disimpan, buka **Actions → Buat narasi dan ilustrasi AI harian → Run workflow** untuk uji pertama. Hasil akan dikomit ke `main` dan tampil di GitHub Pages setelah Pages selesai deploy.
+1. Repository ini dipublikasikan melalui **Settings → Pages → Deploy from a branch → `main` → `/(root)`**. URL: <https://shopppit1-tech.github.io/jatim-pijar/>.
+2. Web Service Render `jatim-pijar-ai` menggunakan paket **Free** dan region **Singapore**. Service menjalankan `render_service.py` dan health check `/health`.
+3. Di Render → service → **Environment**, masukkan **key Gemini baru** sebagai `GEMINI_API_KEY`. Key hanya boleh berada sebagai environment secret Render—jangan commit, kirim lewat chat, atau simpan di GitHub. **Cabut key yang pernah dikirim lewat chat dan buat key baru di Google AI Studio; jangan pakai ulang key lama.**
+4. Setelah key disimpan, buka **Actions → Buat narasi dan ilustrasi AI harian → Run workflow** untuk uji pertama. Hasil akan dikomit ke `main` dan tampil di GitHub Pages setelah Pages selesai deploy.
 
 ## Paket gratis dan batasan
 
@@ -27,7 +26,7 @@ Biaya Gemini terpisah dari Render. Model gambar yang dipilih tidak memiliki free
 
 ## Menjalankan lokal dan pemeriksaan
 
-Tidak ada paket Python tambahan yang diperlukan untuk mengambil RSS, menjalankan backend, atau meminta generasi (key dan endpoint tentu dibutuhkan untuk panggilan nyata). Dari folder repository:
+Tidak ada paket Python tambahan yang diperlukan untuk mengambil RSS, menjalankan backend, atau meminta generasi (key Render dan token GitHub Actions tentu dibutuhkan untuk panggilan nyata). Dari folder repository:
 
 ```bash
 python3 scripts/fetch_news.py

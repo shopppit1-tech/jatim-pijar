@@ -23,6 +23,7 @@ from scripts.generate_editorial import (
 )
 
 WIB = ZoneInfo("Asia/Jakarta")
+RENDER_API_URL = "https://jatim-pijar-ai.onrender.com"
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 
 
@@ -39,13 +40,15 @@ def validate_render_url(value):
     return f"https://{hostname}"
 
 
-def call_render(base_url, token, item):
+def call_render(base_url, github_token, run_id, run_attempt, item):
     request = urllib.request.Request(
         f"{base_url}/internal/generate",
         data=json.dumps({"item": item}, ensure_ascii=False).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {github_token}",
+            "X-GitHub-Run-ID": str(run_id),
+            "X-GitHub-Run-Attempt": str(run_attempt),
         },
         method="POST",
     )
@@ -57,7 +60,7 @@ def call_render(base_url, token, item):
                 raise RuntimeError("Render mengembalikan respons yang terlalu besar.")
             return json.loads(raw.decode("utf-8"))
     except urllib.error.HTTPError as error:
-        raise RuntimeError(f"Render menolak permintaan (HTTP {error.code}); periksa service dan secret pemicu.") from None
+        raise RuntimeError(f"Render menolak permintaan (HTTP {error.code}); periksa status service dan workflow.") from None
     except urllib.error.URLError:
         raise RuntimeError("Koneksi ke backend Render gagal.") from None
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -65,10 +68,12 @@ def call_render(base_url, token, item):
 
 
 def main():
-    api_url = validate_render_url(os.environ.get("RENDER_API_URL", ""))
-    token = os.environ.get("RENDER_WEBHOOK_SECRET", "").strip()
-    if len(token) < 32:
-        raise SystemExit("Secret RENDER_WEBHOOK_SECRET belum tersedia atau terlalu pendek.")
+    api_url = validate_render_url(RENDER_API_URL)
+    github_token = os.environ.get("GITHUB_TOKEN", "").strip()
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+    run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "").strip()
+    if not github_token or not run_id or not run_attempt:
+        raise SystemExit("Skrip ini hanya boleh dijalankan dari GitHub Actions.")
 
     today = datetime.now(WIB).date().isoformat()
     state = read_json(STATE_FILE, {"last_attempt_local_date": None})
@@ -89,7 +94,7 @@ def main():
     state["last_attempt_local_date"] = today
     write_json_atomic(STATE_FILE, state)
 
-    result = call_render(api_url, token, item)
+    result = call_render(api_url, github_token, run_id, run_attempt, item)
     if result.get("news_id") != item.get("id"):
         raise RuntimeError("Backend Render mengembalikan berita yang tidak sesuai.")
     headline = str(result.get("headline", "")).strip()
