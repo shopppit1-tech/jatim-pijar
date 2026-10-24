@@ -19,7 +19,11 @@ from scripts.generate_editorial import generate_image, generate_narrative
 MAX_REQUEST_BYTES = 32 * 1024
 GITHUB_REPO = "shopppit1-tech/jatim-pijar"
 GENERATION_WORKFLOW = ".github/workflows/generate-daily-content.yml"
+GEMINI_VERIFY_WORKFLOW = ".github/workflows/verify-gemini-key.yml"
 GITHUB_API = "https://api.github.com"
+GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
+TEXT_MODEL = "gemini-3.8-flash"
+IMAGE_MODEL = "gemini-nano-banana-2.1"
 WIB = ZoneInfo("Asia/Jakarta")
 _generation_lock = threading.Lock()
 _last_attempt_local_date = None
@@ -72,11 +76,56 @@ def verify_github_action(token, run_id, run_attempt):
         str(run.get("id")) == str(run_id)
         and str(run.get("run_attempt")) == str(run_attempt)
         and repository.get("full_name") == GITHUB_REPO
-        and run.get("path") == GENERATION_WORKFLOW
+        and run.get("path") in (GENERATION_WORKFLOW, GEMINI_VERIFY_WORKFLOW)
         and run.get("head_branch") == "main"
         and run.get("event") in ("schedule", "workflow_dispatch")
         and run.get("status") == "in_progress"
     )
+
+
+def verify_gemini_access(api_key):
+    """Check API-key acceptance and configured model availability without generating content."""
+    def get_json(url):
+        request = urllib.request.Request(
+            url,
+            headers={"x-goog-api-key": api_key, "Accept": "application/json"},
+            method="GET",
+        )
+        opener = urllib.request.build_opener(NoRedirectHandler())
+        try:
+            with opener.open(request, timeout=15) as response:
+                raw = response.read(2 * 1024 * 1024 + 1)
+                if len(raw) > 2 * 1024 * 1024:
+                    return response.status, {}
+                return response.status, json.loads(raw.decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            return error.code, {}
+        except (urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError, TimeoutError):
+            return 0, {}
+
+    list_status, catalog = get_json(f"{GEMINI_API}/models?pageSize=1000")
+    if list_status != 200:
+        return {
+            "key_accepted": False,
+            "http_status": list_status,
+            "text_model_available": False,
+            "image_model_available": False,
+        }
+
+    available_names = set()
+    for model in catalog.get("models", []):
+        if not isinstance(model, dict):
+            continue
+        for field in ("name", "baseModelId"):
+            value = str(model.get(field, "")).removeprefix("models/")
+            if value:
+                available_names.add(value)
+    return {
+        "key_accepted": True,
+        "http_status": 200,
+        "text_model_available": TEXT_MODEL in available_names,
+        "image_model_available": IMAGE_MODEL in available_names,
+    }
 
 
 def reserve_generation_day(today):
@@ -137,7 +186,8 @@ def make_handler():
                 self.send_json(404, {"error": "not found"})
 
         def do_POST(self):
-            if urlparse(self.path).path != "/internal/generate":
+            endpoint = urlparse(self.path).path
+            if endpoint not in ("/internal/generate", "/internal/verify-gemini"):
                 self.send_json(404, {"error": "not found"})
                 return
 
@@ -155,6 +205,10 @@ def make_handler():
             api_key = os.environ.get("GEMINI_API_KEY", "").strip()
             if not api_key:
                 self.send_json(503, {"error": "Gemini is not configured"})
+                return
+
+            if endpoint == "/internal/verify-gemini":
+                self.send_json(200, verify_gemini_access(api_key))
                 return
 
             try:

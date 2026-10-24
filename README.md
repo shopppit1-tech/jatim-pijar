@@ -16,7 +16,8 @@ Website publik ini mengambil metadata RSS untuk Jawa Timur, lalu menampilkan pal
 1. Repository ini dipublikasikan melalui **Settings → Pages → Deploy from a branch → `main` → `/(root)`**. URL: <https://shopppit1-tech.github.io/jatim-pijar/>.
 2. Web Service Render `jatim-pijar-ai` menggunakan paket **Free** dan region **Singapore**. Service menjalankan `render_service.py` dan health check `/health`.
 3. Di Render → service → **Environment**, masukkan **key Gemini baru** sebagai `GEMINI_API_KEY`. Key hanya boleh berada sebagai environment secret Render—jangan commit, kirim lewat chat, atau simpan di GitHub. **Cabut key yang pernah dikirim lewat chat dan buat key baru di Google AI Studio; jangan pakai ulang key lama.**
-4. Setelah key disimpan, buka **Actions → Buat narasi dan ilustrasi AI harian → Run workflow** untuk uji pertama. Hasil akan dikomit ke `main` dan tampil di GitHub Pages setelah Pages selesai deploy.
+4. Cek key tanpa membuat konten melalui **Actions → Verifikasi akses Gemini tanpa generasi → Run workflow**. Workflow ini hanya membaca daftar model; tidak menghasilkan teks atau gambar.
+5. Jika key dan kedua model tersedia, jalankan **Actions → Buat narasi dan ilustrasi AI harian → Run workflow**. Hasil akan dikomit ke `main` dan tampil di GitHub Pages setelah Pages selesai deploy. Batas satu percobaan per hari tetap berlaku, termasuk jika generasi gagal.
 
 ## Paket gratis dan batasan
 
@@ -37,7 +38,7 @@ Untuk pemeriksaan tanpa panggilan jaringan/Gemini:
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 -m py_compile scripts/fetch_news.py scripts/generate_editorial.py scripts/request_render_generation.py render_service.py
+python3 -m py_compile scripts/fetch_news.py scripts/generate_editorial.py scripts/request_render_generation.py scripts/verify_render_gemini.py render_service.py
 node --check app.js
 ```
 

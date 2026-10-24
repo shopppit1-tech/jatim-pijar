@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 from unittest import mock
@@ -278,9 +279,58 @@ class FetchNewsTests(unittest.TestCase):
         }
         with mock.patch.object(render_service, "github_api_get", side_effect=[installation, run]):
             self.assertTrue(render_service.verify_github_action("test-token", "12345", "1"))
+        run["path"] = render_service.GEMINI_VERIFY_WORKFLOW
+        run["event"] = "workflow_dispatch"
+        with mock.patch.object(render_service, "github_api_get", side_effect=[installation, run]):
+            self.assertTrue(render_service.verify_github_action("test-token", "12345", "1"))
         run["path"] = ".github/workflows/other.yml"
         with mock.patch.object(render_service, "github_api_get", side_effect=[installation, run]):
             self.assertFalse(render_service.verify_github_action("test-token", "12345", "1"))
+
+    def test_gemini_access_check_lists_models_without_generation(self):
+        class Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return json.dumps({"models": [
+                    {"name": f"models/{render_service.TEXT_MODEL}"},
+                    {"name": f"models/{render_service.IMAGE_MODEL}"},
+                ]}).encode("utf-8")
+
+        class Opener:
+            request = None
+
+            def open(self, request, timeout):
+                self.request = request
+                self.timeout = timeout
+                return Response()
+
+        opener = Opener()
+        with mock.patch.object(render_service.urllib.request, "build_opener", return_value=opener):
+            result = render_service.verify_gemini_access("test-key-not-real")
+        self.assertTrue(result["key_accepted"])
+        self.assertTrue(result["text_model_available"])
+        self.assertTrue(result["image_model_available"])
+        self.assertEqual(opener.request.get_method(), "GET")
+        self.assertTrue(opener.request.full_url.endswith("/models?pageSize=1000"))
+        self.assertEqual(opener.request.get_header("X-goog-api-key"), "test-key-not-real")
+
+    def test_gemini_access_check_reports_rejected_key_without_body(self):
+        class Opener:
+            def open(self, _request, timeout):
+                raise urllib.error.HTTPError("https://example.com", 403, "Forbidden", {}, None)
+
+        with mock.patch.object(render_service.urllib.request, "build_opener", return_value=Opener()):
+            result = render_service.verify_gemini_access("test-key-not-real")
+        self.assertEqual(result["http_status"], 403)
+        self.assertFalse(result["key_accepted"])
+        self.assertFalse(result["image_model_available"])
 
     def test_render_workflow_saves_one_result_and_blocks_same_day_repeat(self):
         with tempfile.TemporaryDirectory() as directory:
