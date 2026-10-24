@@ -19,7 +19,7 @@
   <section class="hero">
     <p class="eyebrow">KABAR JATIM PIJAR</p>
     <h1>Sorot kabar, terang fakta.</h1>
-    <p>Daftar berita terbaru dari sumber terbuka. Draf konten dibuat dengan aturan lokal tanpa AI atau API key dan harus diperiksa sebelum diterbitkan.</p>
+    <p>Daftar berita terbaru dari RSS, dilengkapi draf narasi dan ilustrasi AI harian yang siap disalin setelah Anda memeriksa sumbernya.</p>
     <div class="hero-note"><b>Catatan redaksi</b><span>Malang Raya tidak termasuk dalam cakupan pencarian. Selalu buka sumber asli untuk memverifikasi fakta.</span></div>
   </section>
   <section class="controls">
@@ -30,9 +30,14 @@
   </section>
   <div class="section-head"><div><p class="eyebrow">PEMBARUAN RSS</p><h2>Berita terbaru</h2></div><span id="count" class="count">0 berita</span></div>
   <div id="news" class="news-grid"><div class="empty">Memuat berita…</div></div>
+  <section class="generated-section">
+    <div class="section-head"><div><p class="eyebrow">DRAF GEMINI HARIAN</p><h2>Narasi baru + ilustrasi</h2></div><span id="generated-count" class="count">0 draf</span></div>
+    <p class="editor-intro">Maksimal satu berita baru per hari. Salin narasi dan unduh ilustrasi AI. Materi dibuat dari judul dan cuplikan RSS—bukan isi artikel lengkap; periksa sumber asli sebelum digunakan.</p>
+    <div id="generated-content" class="generated-grid"><div class="empty">Menunggu draf AI pertama. Pastikan secret GEMINI_API_KEY sudah disetel di GitHub.</div></div>
+  </section>
   <section class="editor">
     <div class="section-head"><div><p class="eyebrow">RUANG REDAKSI</p><h2>Naskah redaksi</h2></div></div>
-    <p class="editor-intro">Sistem menyusun naskah bergaya redaksi dari metadata RSS tanpa AI dan tanpa API key. Tautan sumber tidak dimasukkan ke caption publik; sumber disimpan untuk pengecekan. Karena sistem tidak membaca isi lengkap artikel, verifikasi fakta tetap penting.</p>
+    <p class="editor-intro">Pilihan ini menyusun draf lokal sederhana dari metadata RSS, tanpa AI. Karena sistem tidak membaca isi lengkap artikel, verifikasi fakta tetap penting.</p>
     <div id="draft-empty" class="empty">Pilih “Konten siap posting” untuk membuat naskah otomatis.</div>
     <div id="draft-panel" hidden>
       <label for="draft-title">Judul redaksi</label><input id="draft-title">

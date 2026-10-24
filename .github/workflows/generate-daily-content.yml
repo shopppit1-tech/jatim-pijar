@@ -1,0 +1,58 @@
+name: Buat narasi dan ilustrasi AI harian
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 01:00 UTC = 08:00 WIB. Hanya satu jadwal harian.
+    - cron: "0 1 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-daily-editorial
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HAS_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Skip safely when no Gemini secret is configured
+        if: env.HAS_GEMINI_KEY != 'true'
+        run: |
+          echo "Belum berjalan: tambahkan secret GEMINI_API_KEY di Settings → Secrets and variables → Actions." >> "$GITHUB_STEP_SUMMARY"
+      - name: Set up Python
+        if: env.HAS_GEMINI_KEY == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generate at most one new item
+        if: env.HAS_GEMINI_KEY == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/generate_editorial.py
+      - name: Save daily limit and generated content
+        if: always() && env.HAS_GEMINI_KEY == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add generation_state.json generated_content.json assets/generated
+          if git diff --cached --quiet; then
+            echo "No generated-content changes"
+          else
+            git commit -m "Generate daily AI editorial draft"
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin main; then
+                exit 0
+              fi
+              git rebase --abort 2>/dev/null || true
+              sleep "$((attempt * 2))"
+            done
+            echo "Could not push the daily-limit state to main after retries." >&2
+            exit 1
+          fi

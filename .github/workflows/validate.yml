@@ -22,7 +22,7 @@ jobs:
       - name: Test RSS helpers
         run: python -m unittest discover -s tests -v
       - name: Check Python syntax
-        run: python -m py_compile scripts/fetch_news.py
+        run: python -m py_compile scripts/fetch_news.py scripts/generate_editorial.py
       - name: Check JavaScript syntax
         run: node --check app.js
       - name: Validate JSON files
