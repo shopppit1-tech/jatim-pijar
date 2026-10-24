@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102b24">
+  <meta name="description" content="JatimPijar — pantauan kabar Jawa Timur dengan sumber yang jelas.">
+  <title>JatimPijar</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="brand-mark">JT</span><div><strong>JatimPijar</strong><small>Kabar Jawa Timur, diracik redaksi</small></div></div>
+  <div class="top-right"><span id="updated">Memuat pembaruan…</span><button id="refresh" class="outline">Muat ulang</button></div>
+</header>
+<main>
+  <section class="hero">
+    <p class="eyebrow">KABAR JATIM PIJAR</p>
+    <h1>Sorot kabar, terang fakta.</h1>
+    <p>Daftar berita terbaru dari sumber terbuka. Draf konten dibuat dengan aturan lokal tanpa AI atau API key dan harus diperiksa sebelum diterbitkan.</p>
+    <div class="hero-note"><b>Catatan redaksi</b><span>Malang Raya tidak termasuk dalam cakupan pencarian. Selalu buka sumber asli untuk memverifikasi fakta.</span></div>
+  </section>
+  <section class="controls">
+    <input id="search" type="search" placeholder="Cari judul atau sumber…" aria-label="Cari berita">
+    <select id="region" aria-label="Filter wilayah">
+      <option value="">Semua wilayah</option><option>Surabaya</option><option>Sidoarjo</option><option>Gresik</option><option>Jombang</option><option>Kediri</option><option>Mojokerto</option><option>Pasuruan</option><option>Probolinggo</option><option>Banyuwangi</option><option>Jember</option><option>Tuban</option><option>Bojonegoro</option><option>Madiun</option><option>Ponorogo</option><option>Trenggalek</option><option>Tulungagung</option><option>Blitar</option><option>Pacitan</option><option>Ngawi</option><option>Magetan</option><option>Lamongan</option><option>Bangkalan</option><option>Sampang</option><option>Pamekasan</option><option>Sumenep</option><option>Jawa Timur</option>
+    </select>
+  </section>
+  <div class="section-head"><div><p class="eyebrow">PEMBARUAN RSS</p><h2>Berita terbaru</h2></div><span id="count" class="count">0 berita</span></div>
+  <div id="news" class="news-grid"><div class="empty">Memuat berita…</div></div>
+  <section class="editor">
+    <div class="section-head"><div><p class="eyebrow">RUANG REDAKSI</p><h2>Naskah redaksi</h2></div></div>
+    <p class="editor-intro">Sistem menyusun naskah bergaya redaksi dari metadata RSS tanpa AI dan tanpa API key. Tautan sumber tidak dimasukkan ke caption publik; sumber disimpan untuk pengecekan. Karena sistem tidak membaca isi lengkap artikel, verifikasi fakta tetap penting.</p>
+    <div id="draft-empty" class="empty">Pilih “Konten siap posting” untuk membuat naskah otomatis.</div>
+    <div id="draft-panel" hidden>
+      <label for="draft-title">Judul redaksi</label><input id="draft-title">
+      <label for="draft-body">Naskah redaksi</label><textarea id="draft-body" rows="6"></textarea>
+      <label for="draft-caption">Caption media sosial</label><textarea id="draft-caption" rows="4"></textarea>
+      <div class="draft-actions"><button id="copy-draft">Salin konten</button><button id="download-draft" class="outline">Unduh TXT</button><button id="reset-draft" class="outline">Kosongkan</button></div>
+      <p class="warning">Naskah dibuat tanpa AI dari metadata RSS dan bukan ringkasan artikel penuh. Periksa fakta di sumber asli sebelum publikasi; jangan gunakan foto/video pihak lain tanpa izin.</p>
+    </div>
+  </section>
+</main>
+<footer><strong>JatimPijar</strong><span>Agregasi judul dan tautan RSS. Hak atas berita dan media tetap pada penerbit masing-masing.</span></footer>
+<script src="app.js"></script>
+</body>
+</html>

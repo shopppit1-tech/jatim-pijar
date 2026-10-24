@@ -1,0 +1,39 @@
+name: Update berita JatimPijar
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fetch_news.py"
+      - ".github/workflows/update-news.yml"
+permissions:
+  contents: write
+concurrency:
+  group: update-news
+  cancel-in-progress: true
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch public RSS metadata
+        run: python scripts/fetch_news.py
+      - name: Commit data if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add news.json content.json
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Update latest RSS news"
+            git push
+          fi
