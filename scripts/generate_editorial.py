@@ -132,6 +132,18 @@ def generate_narrative(api_key, news_item):
         ),
         "input": prompt,
         "generation_config": {"max_output_tokens": 500},
+        "response_format": {
+            "type": "text",
+            "mime_type": "application/json",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "headline": {"type": "string"},
+                    "narrative": {"type": "string"},
+                },
+                "required": ["headline", "narrative"],
+            },
+        },
     })
     text = extract_text(response)
     result = parse_json_object(text)

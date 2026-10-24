@@ -143,6 +143,11 @@ class FetchNewsTests(unittest.TestCase):
             image_request = api_call.call_args_list[1].args[1]
             self.assertEqual(text_request["model"], generate_editorial.TEXT_MODEL)
             self.assertEqual(image_request["model"], generate_editorial.IMAGE_MODEL)
+            self.assertEqual(text_request["response_format"]["mime_type"], "application/json")
+            self.assertEqual(
+                text_request["response_format"]["schema"]["required"],
+                ["headline", "narrative"],
+            )
             self.assertIs(text_request["store"], False)
             self.assertIs(image_request["store"], False)
             generated = json.loads(content_file.read_text(encoding="utf-8"))
